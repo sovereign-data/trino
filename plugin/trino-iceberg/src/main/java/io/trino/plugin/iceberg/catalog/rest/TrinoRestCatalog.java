@@ -881,7 +881,16 @@ public class TrinoRestCatalog
         return switch (sessionType) {
             case NONE -> new SessionContext(randomUUID().toString(), null, credentials, ImmutableMap.of(), session.getIdentity());
             case USER -> {
-                String sessionId = format("%s-%s", session.getUser(), session.getSource().orElse("default"));
+                // Include token fingerprint in sessionId so that when token is refreshed,
+                // a new session is created instead of reusing the cached one with expired token
+                Map<String, String> extraCreds = session.getIdentity().getExtraCredentials();
+                String tokenFingerprint = "";
+                if (extraCreds.containsKey("token")) {
+                    String token = extraCreds.get("token");
+                    // Use last 8 chars of token as fingerprint (changes when token is refreshed)
+                    tokenFingerprint = "-" + token.substring(Math.max(0, token.length() - 8));
+                }
+                String sessionId = format("%s-%s%s", session.getUser(), session.getSource().orElse("default"), tokenFingerprint);
 
                 Map<String, String> properties = ImmutableMap.of(
                         "user", session.getUser(),
@@ -901,10 +910,19 @@ public class TrinoRestCatalog
                         .json(new JacksonSerializer<>())
                         .compact();
 
+                // Debug: Log extra credentials from session (extraCreds already obtained above for sessionId)
+                log.info("Session extra credentials keys: %s, has 'token': %s", extraCreds.keySet(), extraCreds.containsKey("token"));
+                if (extraCreds.containsKey("token")) {
+                    String token = extraCreds.get("token");
+                    log.info("Token present, length: %d, starts with: %s, sessionId: %s", token.length(), token.substring(0, Math.min(20, token.length())), sessionId);
+                }
+
                 Map<String, String> credentials = ImmutableMap.<String, String>builder()
-                        .putAll(session.getIdentity().getExtraCredentials())
+                        .putAll(extraCreds)
                         .put(OAuth2Properties.JWT_TOKEN_TYPE, subjectJwt)
                         .buildOrThrow();
+
+                log.info("Session credentials for REST catalog: %s", credentials.keySet());
 
                 yield new SessionCatalog.SessionContext(sessionId, session.getUser(), credentials, properties, session.getIdentity());
             }

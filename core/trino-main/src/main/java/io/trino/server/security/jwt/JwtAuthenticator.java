@@ -14,6 +14,7 @@
 package io.trino.server.security.jwt;
 
 import com.google.inject.Inject;
+import io.airlift.log.Logger;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.JwtParserBuilder;
@@ -28,6 +29,7 @@ import jakarta.ws.rs.container.ContainerRequestContext;
 
 import java.security.Key;
 import java.util.Collection;
+import java.util.Map;
 import java.util.Optional;
 
 import static io.jsonwebtoken.Claims.AUDIENCE;
@@ -38,16 +40,22 @@ import static java.lang.String.format;
 public class JwtAuthenticator
         extends AbstractBearerAuthenticator
 {
+    private static final Logger log = Logger.get(JwtAuthenticator.class);
+
     private final JwtParser jwtParser;
     private final String principalField;
     private final UserMapping userMapping;
     private final Optional<String> requiredAudience;
+    private final boolean tokenPassThrough;
+    private final String tokenCredentialName;
 
     @Inject
     public JwtAuthenticator(JwtAuthenticatorConfig config, @ForJwt Locator<Key> signingKeyLocator)
     {
         principalField = config.getPrincipalField();
         requiredAudience = Optional.ofNullable(config.getRequiredAudience());
+        tokenPassThrough = config.isTokenPassThrough();
+        tokenCredentialName = config.getTokenCredentialName();
 
         JwtParserBuilder jwtParser = newJwtParserBuilder()
                 .keyLocator(signingKeyLocator);
@@ -57,6 +65,10 @@ public class JwtAuthenticator
         }
         this.jwtParser = jwtParser.build();
         userMapping = createUserMapping(config.getUserMappingPattern(), config.getUserMappingFile());
+
+        if (tokenPassThrough) {
+            log.info("JWT token pass-through enabled, credential name: %s", tokenCredentialName);
+        }
     }
 
     @Override
@@ -70,9 +82,18 @@ public class JwtAuthenticator
         if (principal.isEmpty()) {
             return Optional.empty();
         }
-        return Optional.of(Identity.forUser(userMapping.mapUser(principal.get()))
-                .withPrincipal(new BasicPrincipal(principal.get()))
-                .build());
+
+        Identity.Builder identityBuilder = Identity.forUser(userMapping.mapUser(principal.get()))
+                .withPrincipal(new BasicPrincipal(principal.get()));
+
+        // Pass JWT token through to connectors via extra credentials
+        // This enables per-user authorization in downstream services (e.g., Polaris)
+        if (tokenPassThrough) {
+            identityBuilder.withExtraCredentials(Map.of(tokenCredentialName, token));
+            log.debug("Passing JWT token through for user '%s'", principal.get());
+        }
+
+        return Optional.of(identityBuilder.build());
     }
 
     private void validateAudience(Claims claims)
