@@ -34,6 +34,7 @@ public class IcebergRestCatalogModule
         configBinder(binder).bindConfig(IcebergRestCatalogConfig.class);
         install(switch (buildConfigObject(IcebergRestCatalogConfig.class).getSecurity()) {
             case OAUTH2 -> new OAuth2SecurityModule();
+            case SESSION -> new SessionSecurityModule();
             case SIGV4 -> new SigV4SecurityModule();
             case GOOGLE -> new GoogleSecurityModule();
             case NONE -> new NoneSecurityModule();

@@ -16,6 +16,7 @@ package io.trino.plugin.password;
 import com.google.common.collect.ImmutableList;
 import io.trino.plugin.password.file.FileAuthenticatorFactory;
 import io.trino.plugin.password.file.FileGroupProviderFactory;
+import io.trino.plugin.password.keycloak.KeycloakAuthenticatorFactory;
 import io.trino.plugin.password.ldap.LdapAuthenticatorFactory;
 import io.trino.plugin.password.salesforce.SalesforceAuthenticatorFactory;
 import io.trino.spi.Plugin;
@@ -30,6 +31,7 @@ public class PasswordAuthenticatorPlugin
     {
         return ImmutableList.<PasswordAuthenticatorFactory>builder()
                 .add(new FileAuthenticatorFactory())
+                .add(new KeycloakAuthenticatorFactory())
                 .add(new LdapAuthenticatorFactory())
                 .add(new SalesforceAuthenticatorFactory())
                 .build();

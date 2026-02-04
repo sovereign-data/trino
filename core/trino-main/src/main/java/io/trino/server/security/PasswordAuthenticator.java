@@ -17,6 +17,7 @@ import com.google.inject.Inject;
 import io.trino.client.ProtocolDetectionException;
 import io.trino.server.ProtocolConfig;
 import io.trino.spi.security.AccessDeniedException;
+import io.trino.spi.security.CredentialCarryingPrincipal;
 import io.trino.spi.security.Identity;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.core.MultivaluedMap;
@@ -65,9 +66,18 @@ public class PasswordAuthenticator
 
                 // rewrite the original "unmapped" user header to the mapped user (see method Javadoc for more details)
                 rewriteUserHeaderToMappedUser(basicAuthCredentials, request.getHeaders(), authenticatedUser);
-                return Identity.forUser(authenticatedUser)
-                        .withPrincipal(principal)
-                        .build();
+
+                // Build identity with extra credentials if the principal carries them
+                Identity.Builder identityBuilder = Identity.forUser(authenticatedUser)
+                        .withPrincipal(principal);
+
+                // Check if the principal carries extra credentials (e.g., OAuth tokens)
+                // and propagate them to the session for downstream connectors
+                if (principal instanceof CredentialCarryingPrincipal credentialCarryingPrincipal) {
+                    identityBuilder.withAdditionalExtraCredentials(credentialCarryingPrincipal.getExtraCredentials());
+                }
+
+                return identityBuilder.build();
             }
             catch (UserMappingException | AccessDeniedException e) {
                 if (exception == null) {

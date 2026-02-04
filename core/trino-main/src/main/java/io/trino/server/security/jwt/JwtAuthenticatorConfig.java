@@ -29,6 +29,8 @@ public class JwtAuthenticatorConfig
     private String principalField = "sub";
     private Optional<String> userMappingPattern = Optional.empty();
     private Optional<File> userMappingFile = Optional.empty();
+    private boolean tokenPassThrough = false;
+    private String tokenCredentialName = "token";
 
     @NotNull
     public String getKeyFile()
@@ -104,6 +106,31 @@ public class JwtAuthenticatorConfig
     public JwtAuthenticatorConfig setUserMappingFile(File userMappingFile)
     {
         this.userMappingFile = Optional.ofNullable(userMappingFile);
+        return this;
+    }
+
+    public boolean isTokenPassThrough()
+    {
+        return tokenPassThrough;
+    }
+
+    @Config("http-server.authentication.jwt.token-pass-through")
+    public JwtAuthenticatorConfig setTokenPassThrough(boolean tokenPassThrough)
+    {
+        this.tokenPassThrough = tokenPassThrough;
+        return this;
+    }
+
+    @NotNull
+    public String getTokenCredentialName()
+    {
+        return tokenCredentialName;
+    }
+
+    @Config("http-server.authentication.jwt.token-credential-name")
+    public JwtAuthenticatorConfig setTokenCredentialName(String tokenCredentialName)
+    {
+        this.tokenCredentialName = tokenCredentialName;
         return this;
     }
 }
